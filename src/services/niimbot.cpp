@@ -60,6 +60,8 @@
 #define NB_RPL_PRINT_STATUS   0xB3
 #define NB_CMD_PRINT_END      0xF3
 #define NB_RPL_PRINT_END      0xF4
+#define NB_CMD_HEARTBEAT      0xDC   // the reply is never waited for here
+#define NB_HEARTBEAT_ADVANCED1   1
 #define NB_RPL_ERROR          0xDB
 #define NB_RPL_NOT_SUPPORTED  0x00
 // The codes an error reply carries.
@@ -77,14 +79,18 @@
 #define NB_PROTO_V3_FROM       204  // and of protocol 3
 #define NB_PRINT_STATUS_ERR_LEN 10  // a print status this long carries an error code
 #define NB_PRINT_STATUS_ERR_AT   6
+#define NB_PAGE_SIZE_V4_LEN     13  // rows, cols, copies, cut height, cut type, 0, send all, part height
+#define NB_PRINT_START_V4_LEN    9  // pages, four zeros, colour, speed, flag
 
 // id, name, task, head dots, dpi, direction, ribbon, task guessed. Ids and
 // heads from niimbluelib printer_models.ts, the task from its print_tasks
 // table; "guess" where that table has no entry for the id, so the B1's
 // sequence goes as the most common one. The tape printers (LEFT) are here
-// only so a mismatch can say what was found.
+// only so a mismatch can say what was found. The B1 Pro (4097) is on
+// niimbluelib's D110M_V4 task, the protocol 4 sequence.
 static const NiimbotModelInfo NB_MODELS[] = {
   { 4096, "B1",       NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, false },
+  { 4097, "B1 Pro",   NB_TASK_D110M_V4, 567, 300, NB_DIR_TOP, false, false },
   { 4098, "B1 SE",    NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, true  },
   {  768, "B21",      NB_TASK_B21_V1, 384, 203, NB_DIR_TOP,  false, false },
   {  771, "B21 C2B",  NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, false },
@@ -315,12 +321,16 @@ static void nbLogExtras(NbJob& job) {
 }
 
 static const char* taskName(NiimbotTask t) {
-  return t == NB_TASK_B1 ? "B1" : t == NB_TASK_D110 ? "D110" : "B21_V1";
+  return t == NB_TASK_B1 ? "B1" : t == NB_TASK_D110 ? "D110" : t == NB_TASK_D110M_V4 ? "D110M_V4"
+                                                                                  : "B21_V1";
 }
 
 static bool classFits(NiimbotClass cls, const NiimbotModelInfo& m) {
   if (m.dir != NB_DIR_TOP) return false;
-  if (cls == NB_CLASS_M2) return m.dpi == 300 && m.head_px <= 568;
+  // The two 300 dpi classes differ in how they print: the M2 through a ribbon,
+  // the B1 Pro by heat on the paper alone.
+  if (cls == NB_CLASS_M2) return m.dpi == 300 && m.head_px <= 568 && m.thermal_transfer;
+  if (cls == NB_CLASS_B1_PRO) return m.dpi == 300 && m.head_px <= 568 && !m.thermal_transfer;
   return m.dpi == 203 && m.head_px >= 384 && m.head_px <= 400;
 }
 
@@ -335,7 +345,8 @@ static NiimbotResult nbCheckModel(NbJob& job, NiimbotClass cls, uint16_t id) {
          taskName(m->task), m->task_is_guess ? " (guess)" : "", m->head_px, m->dpi,
          m->dir == NB_DIR_TOP ? "top" : "left", m->thermal_transfer ? " ribbon" : "");
   if (!classFits(cls, *m)) {
-    logSDf("NIIMBOT: %s is not of the picked class %s", m->name, cls == NB_CLASS_M2 ? "M2" : "B");
+    logSDf("NIIMBOT: %s is not of the picked class %s", m->name,
+         cls == NB_CLASS_M2 ? "M2" : cls == NB_CLASS_B1_PRO ? "B1 Pro" : "B");
     return NB_MODEL_MISMATCH;
   }
   job.model = m;
@@ -357,7 +368,18 @@ static NiimbotResult nbIdentify(NbJob& job, NiimbotClass cls) {
 }
 
 static NiimbotResult nbInit(NbJob& job) {
-  NiimbotResult r = nbRequest1(job, NB_CMD_SET_DENSITY, NB_DENSITY, NB_RPL_SET_DENSITY);
+  NiimbotResult r;
+  if (job.model->task == NB_TASK_D110M_V4) {
+    // Protocol 4: the label type before the density, then a print start of
+    // nine bytes: one page, four zeros, single colour, normal speed, no flag.
+    r = nbRequest1(job, NB_CMD_SET_LABEL_TYPE, NB_LABEL_WITH_GAPS, NB_RPL_SET_LABEL_TYPE);
+    if (r != NB_OK) return r;
+    r = nbRequest1(job, NB_CMD_SET_DENSITY, NB_DENSITY, NB_RPL_SET_DENSITY);
+    if (r != NB_OK) return r;
+    static const uint8_t start[NB_PRINT_START_V4_LEN] = { 0, 1, 0, 0, 0, 0, 0, 0, 0 };
+    return nbRequest(job, NB_CMD_PRINT_START, start, sizeof(start), NB_RPL_PRINT_START);
+  }
+  r = nbRequest1(job, NB_CMD_SET_DENSITY, NB_DENSITY, NB_RPL_SET_DENSITY);
   if (r != NB_OK) return r;
   r = nbRequest1(job, NB_CMD_SET_LABEL_TYPE, NB_LABEL_WITH_GAPS, NB_RPL_SET_LABEL_TYPE);
   if (r != NB_OK) return r;
@@ -372,6 +394,21 @@ static NiimbotResult nbInit(NbJob& job) {
 static NiimbotResult nbPageStart(NbJob& job, uint16_t rows, uint16_t cols) {
   const NiimbotTask task = job.model->task;
   NiimbotResult r = NB_OK;
+  if (task == NB_TASK_D110M_V4) {
+    // No page start on this task. The printer does not answer the first
+    // packet after the print start over Bluetooth, so niimbluelib sends a
+    // status request that nobody waits for; a reply that still comes is
+    // logged as unexpected and skipped. Then the 13 byte page size: rows,
+    // cols, one copy, and zeros for the cut, the "send all" flag and the
+    // part height.
+    static const uint8_t one = 1;
+    if (!nbSend(job, NB_CMD_PRINT_STATUS, &one, 1, false)) return NB_TRANSPORT;
+    uint8_t size[NB_PAGE_SIZE_V4_LEN] = {};
+    putU16(size, rows);
+    putU16(size + 2, cols);
+    putU16(size + 4, 1);
+    return nbRequest(job, NB_CMD_PAGE_SIZE, size, sizeof(size), NB_RPL_PAGE_SIZE);
+  }
   if (task == NB_TASK_D110) r = nbRequest1(job, NB_CMD_PRINT_CLEAR, 1, NB_RPL_PRINT_CLEAR);
   if (r != NB_OK) return r;
   r = nbRequest1(job, NB_CMD_PAGE_START, 1, NB_RPL_PAGE_START);
@@ -514,6 +551,12 @@ static NiimbotResult nbFinishByStatus(NbJob& job) {
   }
   if (nbRequest1(job, NB_CMD_PRINT_END, 1, NB_RPL_PRINT_END) != NB_OK)
     logSD("NIIMBOT: print end not acknowledged");
+  // This task's printer drops the first packet after the print end, so the
+  // app sends a heartbeat for it to drop and does not wait for the answer.
+  if (job.model->task == NB_TASK_D110M_V4) {
+    static const uint8_t type = NB_HEARTBEAT_ADVANCED1;
+    nbSend(job, NB_CMD_HEARTBEAT, &type, 1, false);
+  }
   return printed ? NB_OK : NB_UNCONFIRMED;
 }
 

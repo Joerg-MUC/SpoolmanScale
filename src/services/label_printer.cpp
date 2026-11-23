@@ -88,9 +88,20 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
   300, LP_PROTO_NIIMBOT
 };
 
+// NIIMBOT B1 Pro: model id 0x1001 (4097), 300 dpi, a 567 dot head, which is
+// 71 bytes and so a 568 dot row, as on the M2. Prints by heat on the paper,
+// no ribbon, so the label does not survive the dryer. It speaks protocol 4,
+// a print sequence of its own (niimbluelib's D110M_V4 task) that no NIIMBOT
+// on this scale used before. Written from niimbluelib alone: nobody has
+// printed on one yet, hence experimental. Stock widths as for the B1.
+static const LabelPrinterProfile PROFILE_NIIMBOT_B1PRO = {
+  LP_MODEL_NIIMBOT_B1PRO, "NIIMBOT", "B1 Pro", 50, 30, 20, 50, 10, 150, 568, 568, true, true,
+  300, LP_PROTO_NIIMBOT
+};
+
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
   LP_MODEL_M220, LP_MODEL_NIIMBOT_M2, LP_MODEL_M110, LP_MODEL_M110S, LP_MODEL_M100,
-  LP_MODEL_NIIMBOT_B, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
+  LP_MODEL_NIIMBOT_B, LP_MODEL_NIIMBOT_B1PRO, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
@@ -148,6 +159,7 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
     case LP_MODEL_M221: return PROFILE_M221;
     case LP_MODEL_NIIMBOT_B:  return PROFILE_NIIMBOT_B;
     case LP_MODEL_NIIMBOT_M2: return PROFILE_NIIMBOT_M2;
+    case LP_MODEL_NIIMBOT_B1PRO: return PROFILE_NIIMBOT_B1PRO;
     default:            return PROFILE_NONE;
   }
 }
@@ -331,7 +343,9 @@ static LabelPrintResult fromBle(BleWriteResult r) {
 static LabelPrintResult printNiimbot(const LabelPrinterProfile& p, const LabelPrinterConfig& c,
                                      const LabelRaster& image, BleProgressFn progress) {
   NiimbotJobInfo info{};
-  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2 ? NB_CLASS_M2 : NB_CLASS_B;
+  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2    ? NB_CLASS_M2
+                         : p.model == LP_MODEL_NIIMBOT_B1PRO ? NB_CLASS_B1_PRO
+                                                              : NB_CLASS_B;
   const NiimbotResult r = niimbotPrint(c.address, image, cls, progress, &info);
   logSDf("Printer: NIIMBOT %s result=%d model=0x%04X transport=%d", p.name, (int)r,
          (unsigned)info.model_id, (int)info.transport);
