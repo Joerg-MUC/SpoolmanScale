@@ -14,7 +14,7 @@ reported upstream as
 | Branch | Base | Content |
 |--------|------|---------|
 | `feature/niimbot-b1-pro` | upstream `main` (v0.8.3) | NIIMBOT B1 Pro as a label printer |
-| `bridge/print-by-id` | `feature/niimbot-b1-pro` | the print-by-id bridge, plus this file (`FORK.md`) |
+| `bridge/print-by-id` | `feature/niimbot-b1-pro` | the print-by-id bridge, the Spoolman userscript, plus this file (`FORK.md`) |
 
 ## NIIMBOT B1 Pro (model id 0x1001 = 4097)
 
@@ -57,6 +57,7 @@ GET  /api/label                           field "lastPrint": the last result,
   `lastPrint`. The spool shows on the display until the idle timeout of two
   minutes, or until it is cleared.
 - **Backend:** Spoolman only, because the lookup is the one of "Spool by ID".
+- **Deep sleep:** in deep sleep the scale is off the network and does not answer. Touch the display to wake it, or set "Tiefschlaf nach (Min.)" to never in the display settings for a bridge that should always be there.
 
 Example:
 
@@ -64,6 +65,13 @@ Example:
 curl -u scale:<password> -X POST "http://<scale>/api/label/print?spool=42"
 curl -u scale:<password> http://<scale>/api/label
 ```
+
+## Spoolman button (userscript)
+
+`userscripts/spoolman-print-label.user.js` adds a button "Auf Waage drucken" next
+to Spoolman's "Beschriftung drucken". It calls the bridge directly from the
+browser. Installation with Tampermonkey, configuration and the workflow are in
+`userscripts/README.md`.
 
 ## Build and install
 
