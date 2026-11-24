@@ -19,9 +19,9 @@ reported upstream as
 ## NIIMBOT B1 Pro (model id 0x1001 = 4097)
 
 The upstream driver did not know this id and stopped with "The scale does not
-know this NIIMBOT model yet". The B1 Pro speaks protocol 4, a print sequence
-that none of the other NIIMBOT models here use (niimbluelib calls it the
-`D110M_V4` task):
+know this NIIMBOT model yet". The B1 Pro reports protocol 5 but needs the print
+sequence niimbluelib calls the `D110M_V4` task (for every protocol version), which
+none of the other NIIMBOT models here use:
 
 - label type before density, a nine byte print start, no page start
 - a thirteen byte page size, sent after a status request nobody waits for
@@ -32,6 +32,16 @@ that none of the other NIIMBOT models here use (niimbluelib calls it the
 The model has its own class, so the M2 (ribbon) and the B1 Pro (direct thermal)
 do not accept each other's printer. Tested on a real B1 Pro. The B1, B21 and M2
 sequences are unchanged. The model is marked experimental in the printer list.
+
+### Model number and switching firmware
+
+The printer model is stored in the scale's settings as a number. In this fork
+(based on v0.8.3) the B1 Pro is 10. In upstream `dev` and in the pull request
+that adds it there (#99) it is 12. After switching between this firmware and a
+`dev` build the stored number is unknown to the other one, and the scale falls
+back to the Phomemo M220. Choose "NIIMBOT B1 Pro" again under Printer, on the
+touch screen or in the web interface: the printer address and the label size
+stay. Printing before that sends Phomemo commands to the B1 Pro and fails.
 
 ## Bridge: print a spool's label over HTTP
 
