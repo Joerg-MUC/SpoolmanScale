@@ -17,6 +17,7 @@
 !test/
 !test/**
 !LICENSE
+!FORK.md
 # Python caches the tools leave behind.
 **/__pycache__/
 # A bench helper that stays on the machine it was written for.

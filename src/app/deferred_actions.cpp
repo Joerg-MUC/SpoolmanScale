@@ -77,5 +77,7 @@ bool print_spool_label_pending   = false;
 bool show_pc_print_pending       = false;
 bool print_last_label_pending    = false;
 bool print_last_filament_label_pending = false;
+int  print_by_id_pending         = 0;
+bool print_by_id_filament        = false;
 bool label_dates_pending         = false;
 bool print_own_layout_pending    = false;

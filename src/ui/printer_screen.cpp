@@ -2,6 +2,7 @@
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
+#include "app/id_spool.h"
 #include "app/label_server.h"
 #include "app/label_spool.h"
 
@@ -50,6 +51,7 @@ int printerLastTestResult() { return s_last_test; }
 
 static int s_last_label = -1;
 int printerLastLabelResult() { return s_last_label; }
+void printerLastLabelClear() { s_last_label = -1; }
 
 // Where the back button leads: the print sheet, when that opened the screen.
 static bool s_back_to_sheet = false;
@@ -124,6 +126,19 @@ void printerPrintLastLabel(LabelKind kind) {
     showInfoPopup(STR_PRN_TITLE, STR_PRN_ERR_NO_SPOOL, INFO_WARN);
     return;
   }
+  printSpoolLabel(spool, false, kind);
+}
+
+void printerPrintSpoolById(int spool_id, LabelKind kind) {
+  printerOffsetFlush();
+  idSpoolAdopt(spool_id);
+  SpoolLabelData spool{};
+  if (!idSpoolActive() || !labelSpoolFromScan(&spool) || spool.id != spool_id) {
+    logSDf("Printer: bridge print of spool #%d failed, the spool could not be loaded", spool_id);
+    s_last_label = STR_PRN_ERR_NO_SPOOL;
+    return;
+  }
+  logSDf("Printer: bridge print of spool #%d", spool_id);
   printSpoolLabel(spool, false, kind);
 }
 
@@ -402,6 +417,13 @@ void handlePrinterDeferredActions() {
     print_last_label_pending = false;
     print_last_filament_label_pending = false;
     printerPrintLastLabel(kind);
+  }
+  if (print_by_id_pending) {
+    const int id = print_by_id_pending;
+    const LabelKind kind = print_by_id_filament ? LABEL_KIND_FILAMENT : LABEL_KIND_SPOOL;
+    print_by_id_pending = 0;
+    print_by_id_filament = false;
+    printerPrintSpoolById(id, kind);
   }
   if (print_own_layout_pending) {
     print_own_layout_pending = false;

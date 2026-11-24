@@ -146,6 +146,9 @@ static void serverJson(String& j, const LabelPrinterConfig& c, int spool_id) {
 }
 
 // Which label a request is about: ?kind=1 the filament's, else the spool's.
+// The highest spool id the bridge takes: what the scale's own id pad can type, six digits.
+#define BRIDGE_SPOOL_ID_MAX 999999
+
 static LabelKind kindOf(WebServer& srv) {
   return srv.arg("kind") == "1" ? LABEL_KIND_FILAMENT : LABEL_KIND_SPOOL;
 }
@@ -746,6 +749,29 @@ static void routes(WebServer &srv) {
   // last spool under the overlay, the page fetches the verdict afterwards.
   srv.on("/api/label/print", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_LABEL))) return;
+    // The bridge: ?spool=N prints that spool's label, not the last one scanned.
+    // The loop does the work; GET /api/label tells the verdict as "lastPrint",
+    // empty until it is in.
+    if (srv.hasArg("spool")) {
+      const String arg = srv.arg("spool");
+      char* end = nullptr;
+      const long id = strtol(arg.c_str(), &end, 10);
+      if (arg.isEmpty() || *end || id < 1 || id > BRIDGE_SPOOL_ID_MAX) {
+        srv.send(400, "text/plain", "bad spool id");
+        return;
+      }
+      if (!labelPrinterConfigured(labelPrinterLoadConfig())) { srv.send(409, "text/plain", T(STR_PRN_ERR_NO_PRINTER)); return; }
+      if (!bleEnabled()) { srv.send(409, "text/plain", T(STR_PRN_ERR_BLE_OFF)); return; }
+      if (bleStackStuck()) { srv.send(409, "text/plain", T(STR_PRN_ERR_STUCK)); return; }
+      // A tag on the reader is a spool being weighed: never replaced from here.
+      if (tag_present || print_by_id_pending) { srv.send(409, "text/plain", "busy"); return; }
+      print_by_id_pending = (int)id;
+      print_by_id_filament = srv.arg("kind") == "1";
+      printerLastLabelClear();
+      logSDf("Web: bridge label print for spool #%ld requested", id);
+      srv.send(202, "text/plain", T(STR_W_P_QUEUED));
+      return;
+    }
     SpoolLabelData s{};
     if (!labelSpoolLast(&s)) { srv.send(409, "text/plain", T(STR_PRN_ERR_NO_SPOOL)); return; }
     if (!labelPrinterConfigured(labelPrinterLoadConfig())) { srv.send(409, "text/plain", T(STR_PRN_ERR_NO_PRINTER)); return; }

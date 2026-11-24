@@ -171,6 +171,11 @@ extern bool show_pc_print_pending;
 extern bool print_last_label_pending;
 // The same for the filament's label of that spool.
 extern bool print_last_filament_label_pending;
+// The bridge: POST /api/label/print?spool=N parks the spool's id here (0 for
+// none) and the loop fetches that spool by id and prints its label, so
+// something other than the scale's own pad can ask for a label.
+extern int  print_by_id_pending;
+extern bool print_by_id_filament;
 extern bool label_dates_pending;
 // The print card's answer to a label the server would not draw: print the
 // same spool with the scale's own layout.

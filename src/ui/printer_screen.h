@@ -30,6 +30,12 @@ void printerPrintPadLabel(LabelKind kind);
 // The label of the last spool scanned, on the pad or not: what the print
 // sheet and the browser's editor showed. From the loop, like the one above.
 void printerPrintLastLabel(LabelKind kind);
+
+// The bridge: fetches the spool by its id, as "Spool by ID" does, and prints
+// its label. The verdict is in printerLastLabelResult(). Loop task only.
+void printerPrintSpoolById(int spool_id, LabelKind kind);
+// Forgets the last verdict, so a caller polling for it sees the new one only.
+void printerLastLabelClear();
 // The next build of the screen is entered from the print sheet: its back
 // button leads there instead of to the Bluetooth screen.
 void printerScreenFromSheet();
