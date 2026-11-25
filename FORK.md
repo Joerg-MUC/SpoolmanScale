@@ -1,13 +1,12 @@
 # Fork notes: NIIMBOT B1 Pro and the label bridge
 
-This is a private fork of [SpoolmanScale](https://github.com/Niko11111/SpoolmanScale)
+This is a fork of [SpoolmanScale](https://github.com/Niko11111/SpoolmanScale)
 v0.8.3. It adds two things that are not in the upstream release. Everything else
 is unchanged and keeps the upstream license (GPL-3.0-or-later).
 
-The fork is not meant to go upstream as it is: the bridge works with Spoolman
-only, while the scale supports several backends. The B1 Pro support was
-reported upstream as
-[issue #98](https://github.com/Niko11111/SpoolmanScale/issues/98).
+The B1 Pro support went upstream as
+[issue #98](https://github.com/Niko11111/SpoolmanScale/issues/98) and
+[pull request #99](https://github.com/Niko11111/SpoolmanScale/pull/99).
 
 ## Branches
 
@@ -66,7 +65,9 @@ GET  /api/label                           field "lastPrint": the last result,
   the backend like "Spool by ID" does, prints, and keeps the verdict for
   `lastPrint`. The spool shows on the display until the idle timeout of two
   minutes, or until it is cleared.
-- **Backend:** Spoolman only, because the lookup is the one of "Spool by ID".
+- **Backend:** whichever backend the scale is set to. The lookup is the one behind
+  "Spool by ID", which asks Spoolman, FilaMan or BamBuddy as set. Tested with
+  Spoolman only.
 - **Deep sleep:** in deep sleep the scale is off the network and does not answer. Touch the display to wake it, or set "Tiefschlaf nach (Min.)" to never in the display settings for a bridge that should always be there.
 
 Example:

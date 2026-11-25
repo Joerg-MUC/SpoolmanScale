@@ -100,7 +100,9 @@ continuously.
 
 - One button per selected spool, one label at a time (the button waits a few
   seconds after each print).
-- Spoolman only: the scale fetches the spool with the lookup of "Spool by ID".
+- The button is for Spoolman's pages. The scale itself fetches the spool from
+  whichever backend is set, with the lookup of "Spool by ID" (tested with
+  Spoolman only).
 - The button finds its place by the text "Beschriftung drucken" (or "Print
   labels"). If Spoolman changes that text, the button floats at the bottom right
   of the page instead.
